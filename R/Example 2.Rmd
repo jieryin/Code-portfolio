@@ -1,9 +1,3 @@
----
-title: "homework 7"
-author: "Jier Yin"
-date: "2023-10-27"
-output: pdf_document
----
 ```{r setup, echo=FALSE, message=FALSE}
 library(ggplot2)
 data("stackloss")
