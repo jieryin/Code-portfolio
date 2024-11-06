@@ -1,0 +1,344 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(394932)
+library(tidyverse)
+library(ggplot2)
+
+if (!require("lattice")) { 
+  install.packages("lattice", repos = "https://cloud.r-project.org")  
+}
+```
+
+## Problem 1 (2 pts)
+
+### Part (a) (1 pt)
+
+Here is the expression for a pseudorandom number generator that was used
+on a particular version of the VAX VMS operating system. It produces
+numbers between 0 and $2^{31} - 1$
+
+$$r(s) = \left( s \times (2^{16} + 3)\right) \mod 2^{31} $$
+
+This particular random number generator was notorious for producing poor
+quality of random numbers.
+
+Implement a version of this random number generator that returns a
+single value and then use that to return `n` random integers
+
+#Answer:
+
+```{r}
+bad_rand_int <- function(seed) {
+  # Note: mod is "%%" in R
+  (seed * (2^16 + 3)) %% (2^31)
+}
+
+bad_rand_ints <- function(seed, n) {
+  num <- numeric(n)
+  for (i in 1:n) {
+    num[i] <- bad_rand_int(seed)
+    seed <- num[i]
+  }
+  return(num)
+}
+
+```
+
+Using your function `bad_rand_ints`, starting from a seed of 406
+generate 10 random values. Do you notice anything that would suggest
+these numbers are not uniformly random over the set 0 to $2^{31} - 1$?
+(Hint: think of classes of numbers you would expect to see in known
+proportions -- do you see these classes appearing correctly?)
+
+
+#Answer:
+```{r}
+bad_rand_ints(406, 10)
+```
+As shown above, all of the numbers are even numbers. So it is not a uniformly random draw. It suggests that if we use a even seed, we only sample from even numbers.
+
+
+
+
+Now write a function that uses `bad_rand_ints` to produce a vector
+containing `n` psuedorandom $U(0,1)$ values.
+
+```{r}
+bad_rand_u01 <- function(seed, n) {
+  bad_rand_ints(seed, n) / (2^31 - 1)
+}
+```
+
+Draw 10,000 random numbers and make a Q-Q plot compared to the uniform
+distribution.
+
+
+#Answer:
+```{r}
+# create QQ plot
+random_numbers <- bad_rand_u01(406, 10000)
+
+ggplot(data.frame(x = random_numbers), aes(sample = x)) +
+  stat_qq(distribution = qunif) + 
+  stat_qq_line(distribution = qunif, color = "red") +
+  labs(title = "Q-Q Plot of Random Numbers vs Uniform Distribution",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles")
+```
+
+### Part (b) (1 pt)
+
+While a sequence of PRNGs might look OK when viewed *marginally*,
+viewing the sequences as points in a space can be useful to detect
+non-random patterns.
+
+When you are ready, the following code will produce a plot when called
+on your collection of 10,000 $U(0,1)$ random numbers from the previous
+part. What pattern do you see?
+
+
+#Answer:
+The points tend to cluster on several planes. The points are not uniformly spread within the space.
+
+```{r}
+plot_bad_rands <- function(prngs) {
+  if (length(prngs) %% 10 != 0) {
+    stop("We must have random numbers in a multiple of 10")
+  }
+  # group the random numbers into groups of 10, but only use the first 3 in each group
+  m <- matrix(prngs, ncol = 10, byrow = TRUE)[, 1:3]
+  
+  # label the columns 
+  colnames(m) <- c("X", "Y", "Z")
+  
+  cloud(Z ~ X + Y, as.data.frame(round(m, 3)), pch = 20, cex = 0.1)
+}
+
+plot_bad_rands(bad_rand_u01(406, 10000))
+```
+
+## Problem 2 (6 pts)
+
+Recall the exponential distribution with mean $\theta^{-1}$ has density:
+$$f(x) = \theta e^{- \theta x}$$
+
+### Part (a) (2 pt)
+
+Find the quantile function of an exponential with rate parameter
+$\theta$.
+
+#Answer:
+CDF of the exponential distribution:
+$$
+F(t) = \int_0^{t} \theta e^{-\theta x} \, dx = \left. - e^{-\theta x} \right|_{x=0}^t = 1 - e^{-\theta t}
+$$
+
+$$u = 1 - e^{-\theta x}$$
+$$-\theta x = \log(1 - u)$$
+quantile function:
+$$x = - \frac{\log(1 - u)}{\theta}$$
+
+### Part (b) (2 pt)
+
+You may recall that the mean and standard deviation of
+$\text{Exp}(\theta)$ is $\mu = \sigma = 1/\theta$. But what is the skew?
+$$\gamma = \text{E}\left[\left(\frac{X - \mu}{\sigma}\right)^3\right]$$
+Use the quantile function from (a) to sample 10,000 exponential random
+variables with rate parameter 2. Estimate $\gamma$ and provide a 99.9%
+confidence interval.
+
+#Answer:
+```{r}
+quantile_func <- function(u, theta) {
+  - log(1 - u) / theta
+}
+
+exponential_random <- quantile_func(runif(10000), 2)
+
+a <- ((exponential_random - 1/2) / (1/2))^3
+gamma <- mean(a)
+gamma
+t.test(a, conf.level = .999)$conf.int
+```
+
+### Part (c) (2 pts)
+
+Use your results from (a) to prove that if $U \sim U(0, 1)$ then,
+$$- \frac{1}{\theta} \log(U) \sim \text{Exp}(\theta), \theta > 0$$
+(Where $\log$ is the natural logarithm as always in this class.)
+
+#Answer:
+
+$$ F_{1-U}(t) = P(1 - U \le t) $$
+  $$= 1 - P(U \le 1 - t) $$
+  $$= 1 - (1 - t)$$
+  $$= t $$
+  $$= P(U \le t) $$
+$$= F_U(t)$$
+
+
+Since $U \sim U(0,1)$ and $U-1 \sim U(0,1)$ and we already know $- \frac{1}{\theta} \log(1 - U) \sim \text{Exp}(\theta)$, we now know that $$- \frac{1}{\theta} \log(U) \sim \text{Exp}(\theta), \theta > 0$$
+
+
+## Problem 3 (8 pts)
+
+The standard Normal distribution:
+$$f(x) = \frac{1}{\sqrt{2\pi}} \exp\{ -x^2/2 \}$$ does not have a closed
+form quantile function, so it would be difficult to apply the inversion
+method. Instead, we can use a transformation method that still only uses
+$U(0,1)$ random variables.
+
+### Part (a) (2 pt)
+
+Consider two **independent** standard Normal variables $X$ and $Y$. We
+can think of these as points on a Cartesian plane:
+
+```{r}
+xy <- ggplot(data.frame(x = rnorm(50), y = rnorm(50)), aes(x = x, y = y)) + geom_point()
+print(xy)
+```
+
+We could also think about these points using **polar coordinates** based
+on a radius (distance from the origin) $R = \sqrt{X^2 + Y^2}$ and angle
+(from 0 to $2\pi$) such that $\cos(A) = X / R$ and $\sin(A) = Y / R$:
+
+```{r}
+xy + geom_segment(aes(xend = 0, yend = 0))
+```
+
+What is $R^2$? [Use this list of common
+relationships](https://en.wikipedia.org/wiki/Relationships_among_probability_distributions)
+to express $R^2$ as an **exponential random variable** (since
+exponentials can be parameterized using **rate** or **mean**, use the
+rate parameterization $W \sim \text{Exp}(\theta)$, $E(X) = 1/\theta$).
+
+#Answer:
+$$R^2 = X^2 + Y^2$$
+$X^2 \sim \chi^2(1)$, $Y^2 \sim \chi^2(1)$ and they are independent.The sum is $\chi^2(2)$. And since $R^2$ is exponential, $E(R^2) = 2$ and then $R^2 \sim \text{Exp}(1/2)$.
+
+### Part (b) (2 pt)
+
+Show that the joint distribution for two independent standard Normal
+random variables is proportional to the joint distribution for a
+$A \sim U(0, 2\pi)$ and the $R^2$ you found in (a), where $A$ and $R^2$
+are independent.
+
+#Answer:
+$$f(a) = 1 / (2\pi)$$
+$$f(r^2) = (1/2) \exp(-r^2 / 2)$$
+$$f(a, r^2) = \left(\frac{1}{2 \pi}\right) \frac{1}{2} \exp\left\{-r^2 / 2\right\}$$
+$$f(x, y) = \left(\frac{1}{\sqrt{2 \pi}} \exp\left\{-x^2 / 2\right\}\right) \left(\frac{1}{\sqrt{2 \pi}} \exp\left\{-y^2 / 2\right\}\right) $$
+ $$ = \left(\frac{1}{2 \pi}\right) \exp\left\{-(x^2 + y^2) / 2\right\}$$
+  $$= \left(\frac{1}{2 \pi}\right) \exp\left\{-r^2 / 2\right\} $$
+The two functions are proportional.
+
+### Part (c) (2 pt)
+
+Use the result from 3(c) that
+$-(1/\theta) \log(U) \sim \text{Exp}(\theta)$ along with the identity
+$X = R \cos(A)$ to show how to generate one standard Normal random
+variable from two independent $U(0,1)$ random variables. (Interesting
+note, you can also use $Y = R \sin(A)$ to get a second standard Normal,
+which is also independent, but this is not necessary to show.)
+
+#Answer:
+Let $U_1$ and $U_2$ be independent and identically distributed (iid) random variables, both uniformly distributed. Then, the expression $R^2 = -2 \log(U_1)$ follows an exponential distribution with rate parameter $\theta = \frac{1}{2}$. Furthermore, since $A = 2\pi$, $ U_2 $ is uniformly distributed over the interval $(0, 2\pi)$. As shown in part b, the pair $(R^2, A)$ has the same distribution as $(X, Y)$.
+
+Thus, $X$ can be expressed as:
+
+$$
+X = R \cos(A) = \sqrt{-2 \log(U_1)} \cos(2 \pi U_2)
+$$
+
+
+### Part (d) (2 pt)
+
+Implement your part (c) in R. Demonstrate your results using a
+quantile-quantile plot (replacing `rnorm` with your solution.)
+
+#Answer:
+```{r}
+func <- function(n) {
+  u1 <- runif(n)
+  u2 <- runif(n)
+  sqrt(-2 * log(u1)) * cos(2 * pi * u2)
+}
+
+p2d <- func(10000)
+
+ggplot(data.frame(x = p2d), aes(sample = x)) + geom_qq() + geom_abline(intercept = 0, slope = 1)
+```
+
+The points follows the 45 degree line, so approximately the sample follows a normal distribution.
+
+
+## Problem 4 (4 pt)
+
+### Part (a) (2 points)
+
+In class we proved that the inversion method works in the continuous
+case. Prove that it works in the discrete case as well. Two useful
+facts:
+
+-   For any discrete on any domain, there is is a one-to-one mapping
+    from that domain to the integers (or a subset of the integers). So
+    without loss of generality, we can assume all discrete RVs have the
+    integers as their support.
+-   Let the discrete random variable $X$ be defined on the set $\Omega$.
+    If $P(X = x) = P(Y = x)$ for all $x \in \Omega$, then $X$ and $Y$
+    have the same distribution.
+
+#Answer:
+\[
+  \begin{aligned}
+    P(Q_x(U) = a) &= P(\{F_x(a - 1) < U \le F_x(a) \})\\
+    &= P(U \le F_X(a)) - P(U \le F_X(a - 1))\\
+    &= F_X(a) - F_X(a - 1) \\
+    &= P(X \le a) - P(X \le a - 1) \\
+    &= P(X = a) 
+  \end{aligned}
+\]
+### Part (b) (2 points)
+
+Use the inversion method to generate draws from the Poisson distribution
+with probability mass function:
+
+$$p(x) = \frac{\lambda^x e^{-\lambda}}{x!}$$
+
+where $x = 0, 1, 2, \ldots$ and $\lambda > 0$ is the rate parameter. Let
+$\lambda = 2$. Do not use `rpois` or `qpois` to generate the Poisson
+random variables. Demonstrate the results using a QQ-plot (you can use
+`qois` as the reference distribution).
+
+#Answer:
+```{r}
+lambda <- 2
+
+generate_poisson_inversion <- function(lambda, n) {
+  poisson_rvs <- numeric(n)
+  
+  for (i in 1:n) {
+    u <- runif(1)  
+    x <- 0      
+    p <- exp(-lambda) 
+    cdf <- p 
+    
+    while (u > cdf) {
+      x <- x + 1
+      p <- p * lambda / x 
+      cdf <- cdf + p       
+    }
+    poisson_rvs[i] <- x
+  }
+  
+  return(poisson_rvs)
+}
+
+poisson_samples <- generate_poisson_inversion(lambda, 10000)
+
+qqplot(qpois(ppoints(10000), lambda), poisson_samples, 
+       main = "Q-Q Plot: Inversion Method vs Poisson Distribution",
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0, 1, col = "red")
+```
