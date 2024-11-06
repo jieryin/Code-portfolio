@@ -1,0 +1,129 @@
+---
+title: "homework 7"
+author: "Jier Yin"
+date: "2023-10-27"
+output: pdf_document
+---
+```{r setup, echo=FALSE, message=FALSE}
+library(ggplot2)
+data("stackloss")
+library(GGally)
+library(MASS)
+library(robustbase)
+library(quantreg)
+library(faraway)
+```
+# Introduction
+In this exercise, we examine the stackloss data to understand how stack loss (the response variable) is influenced by three predictor variables. We'll employ various regression techniques - Least squares, Least absolute deviations, Huber method, and Least trimmed squares. After comparing the results from these methods, diagnostic techniques will be used to detect any outliers or influential points. Based on these diagnostics, we'll reassess the relationship using the least squares method after removing the influential points. 
+
+# Data
+The data comes from the plant of a company that was concerned about the loss of ammonia from the stacks. The engineers believed that the stack loss was related to a few operational parameters of the plant. There are a total of 21 observations in this dataset.
+
+There are 4 variables in the dataset:
+
+1. stack.loss: The response variable. It represents the percentage of ammonia loss from the stack.
+
+2. Air.Flow: This represents the rate of operation of the plant. It's one of the predictor variables.
+
+3. Water.Temp: The water temperature in degrees Fahrenheit. Another predictor variable believed to influence the stack loss.
+
+4. Acid.Conc.: Concentration of the acid, representing another operational condition.
+```{r 1, fig.height=3, fig.width=6}
+summary(stackloss)
+par(mfrow=c(1,4))
+hist(stackloss$Air.Flow, main="Histogram Air Flow", xlab="Air Flow")
+hist(stackloss$Water.Temp, main="Histogram Water.Temp", xlab="Water Temp")
+hist(stackloss$Acid.Conc., main="Histogram Acid.Conc.", xlab="Acid Conc.")
+hist(stackloss$stack.loss, main="Histogram Acid.Conc.", xlab="Acid Conc.")
+```
+
+In our univariate analysis, several observations can be made:
+
+Air.Flow: The distribution is notably right-skewed. Most values cluster around 50-60, with a mean of 60.43 and a median of 58. The range for this variable is between 50 and 80.
+
+Water.Temp: The distribution presents two prominent modes, with values frequently occurring between 16-20 and 22-24. The mean for 'Water.Temp' stands at 21.1, and the median is 20.
+
+Acid.Conc: The peak of its distribution lies between 85-90. The recorded values for 'Acid.Conc' span from 72 to 93.
+
+stack.loss (Response Variable): Predominantly, the values are situated below 15. However, the entire range of 'stack.loss' values extends from 7 to 42.
+
+```{r 2, fig.height=3, fig.width=5}
+ggpairs(stackloss)
+```
+
+In our bivariate analysis, we observed a pronounced positive correlation between the predictors 'Water.Temp' and 'Air.Flow', indicated by a correlation coefficient of 0.78. Moreover, both 'Air.Flow' and 'Water.Temp' exhibit a strong correlation with the response variable, 'stack.loss'. Conversely, the correlation between 'stack.loss' and 'Acid.Conc' is not statistically significant.
+
+# Models
+First e fit a linear regression model using the Ordinary Least Squares (OLS) method with 'Air.Flow', 'Water.Temp', and 'Acid.Conc' as predictors and 'stack.loss' as the response. 
+
+For our second model, we employ the Least Absolute Deviations (LAD) technique. This model uses 'Air.Flow', 'Water.Temp', and 'Acid.Conc' as predictors to predict 'stack.loss'. 
+
+Next, we fit a regression model using the Huber method, with 'Air.Flow', 'Water.Temp', and 'Acid.Conc' serving as predictors and 'stack.loss' as the dependent variable. 
+
+Lastly, we apply the Least Trimmed Squares (LTS) method, fitting a model with 'Air.Flow', 'Water.Temp', and 'Acid.Conc' as predictors and 'stack.loss' as the response.
+
+After comparing the results, we will use diagnostic methods to detect any outliers or influential points. After removing these points, we will use the least squares again and compare the results.
+
+# Results
+## Least Squares
+```{r 3, echo=FALSE}
+ls_model <- lm(stack.loss ~ ., data = stackloss)
+summary(ls_model)
+```
+
+## Least Absolute Deviations
+```{r 4,echo=FALSE}
+lad_model <- rq(stack.loss ~ ., data = stackloss)
+summary(lad_model)
+```
+
+## Huber Method
+```{r 5, echo=FALSE}
+huber_model <- rlm(stack.loss ~ ., data = stackloss)
+summary(huber_model)
+```
+
+## Least Trimmed Squares
+```{r 6, echo=FALSE}
+set.seed(123)
+lts_model <- ltsReg(stack.loss ~ ., data = stackloss)
+summary(lts_model)
+```
+
+## Comparison
+
+Coefficient Differences: Across all models, the coefficient of Acid.Conc is not very significant, suggesting that this predictor might not be very influential in determining stack.loss.Air.Flow and Water.Temp consistently show significance across all models, suggesting their strong influence on stack.loss.
+
+Fit: The LTS model clearly stands out with an adjusted R-squared of 96.92%, suggesting it explains the variance in stack.loss the best among all models. The OLS model is also fairly good, explaining 89.83% of the variance. Based on the residual standard error, the LTS model seems to provide the most accurate predictions (1.253), followed closely by the Huber method (2.441) and then the OLS model (3.243).
+
+## Outliers/influential Points
+
+Let us perform the t-test and compute p-values associated with each of these statistics and compare that significance level a/n for a=0.05.
+```{r 7}
+t_i <- rstudent(ls_model)
+p_values <- 2*(1-pt(abs(t_i), df=21-4-1))
+p_values < 0.05/21
+```
+
+Since we fail to reject the null hypothesis in every single case, we have no evidence of outliers.
+
+```{r 8}
+cook <- cooks.distance(ls_model)
+halfnorm (cook, nlab = 5, ylab= "Cook's distances")
+```
+The one labelled '21' is the only one that diverge unusually from the rest of the points. So, the influential point is observation 21.
+
+Let us actually remove the observation 21 and study how this changes the fitted model.
+
+```{r 9, echo=FALSE}
+ls_model_new <- lm(stack.loss ~ ., data = stackloss[-c(21),])
+summary(ls_model_new)
+```
+
+Comparing this with the original model summary, we observe a meaningful change in values of parameter estimates. The RSE is notably lower (2.569 vs. 3.243) when observation 21 is excluded, suggesting a better fit of the model to the data.
+Both the Multiple R-squared and the Adjusted R-squared values are higher in the model excluding observation 21, indicating a better proportion of variance explained by the model.
+
+
+# Conclusion
+
+Observation 21 appears to have an influential effect on the linear regression model. Excluding this observation yields a model that explains a higher proportion of the variance in the response variable and fits the remaining data more closely. As for the fit of the models, based on the residual standard error, the LTS model seems to provide the most accurate predictions. The LTS model clearly stands out with an adjusted R-squared of 96.92%. This is reasonable as LTS is an example of a resistant regression method. Resistant methods are good for dealing with data where we expect a certain number of bad observations that we want to have no weight in the analysis.
