@@ -1,0 +1,167 @@
+---
+title: "homework3"
+author: "Jier Yin"
+date: "2023-09-29"
+output: pdf_document
+---
+## 1
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(MASS)
+library(ggplot2)
+data(Boston)
+library(reshape2)
+library(corrplot)
+library(tibble)
+library(dplyr)
+```
+
+```{r 1-1, fig.show='hold', fig.height = 2, fig.width = 2, warning=FALSE}
+summary(Boston)
+par(mfrow= c(5,3))
+cont_vars <- c('crim', 'zn', 'black', 'age', 'rad')
+for (var in cont_vars) {
+  p <- ggplot(Boston, aes_string(x = var)) + 
+    geom_histogram(fill = "lightblue", color = "black", bins = 30) + 
+    labs(x=var, y="Frequency") + 
+    theme_minimal()
+  print(p)
+}
+
+p2 <- ggplot(Boston, aes(x = factor(chas))) + 
+  geom_bar(fill = "lightblue", color = "black") + 
+  labs(x="Charles River (1 = bounds river)", y="Count") + 
+  theme_minimal()
+print(p2)
+```
+I want to present some of the most interesting distribution of variables:
+For the variable crim and zn, most of the values is 0, and the distribution is strongly right-skewed.
+For the variable black and age, the distribution is  left-skewed; black with most of the values around 400; age with most of the values around 75-100.
+For the variable chas, there are more than 450 0s and less than 50 1s.
+For the rad variable, the distribution is bimodal, with most of the values on 5 or 25.
+
+```{r 1-1-1,  fig.show='hold', fig.height = 3, fig.width = 5}
+cor_matrix <- cor(Boston)
+melted_cor <- melt(cor_matrix)
+ggplot(data = melted_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() + 
+  scale_fill_gradient2(low="blue", high="red", mid="white", midpoint=0, limit=c(-1,1), name="Correlation") + 
+  labs(title="Correlation Matrix Heatmap") + 
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle=45, vjust=1, size=10, hjust=1))
+```
+For the multi-variable summary, tax and rad has a strong positive relationship. Medv and lstat, dis and indus, dis and nox, dis and age has a strong negarive relationship.
+
+
+## 2
+```{r 2, fig.show='hold', fig.height = 2, fig.width = 2, warning=FALSE, message=FALSE}
+par(mfrow= c(4,5))
+predictors <- names(Boston)[!names(Boston) == "crim"]
+results <- tibble(Predictor = character(), Coefficient = numeric(), 
+                  P_Value = numeric(), Significance = character(), 
+                  R_Squared = numeric())
+significant_vars <- list()
+for (var in predictors) {
+  model <- lm(as.formula(paste("crim ~", var)), data=Boston)
+  summary_model <- summary(model)
+  
+  coef_val <- coef(summary_model)[2, 1]
+  p_value <- coef(summary_model)[2, 4]
+  r_squared <- summary_model$r.squared
+  significance_status <- ifelse(p_value < 0.05, "Significant", "Not Significant")
+  results <- rbind(results, tibble(Predictor = var, Coefficient = coef_val, 
+                                   P_Value = p_value, Significance = significance_status, 
+                                   R_Squared = r_squared))
+  if (p_value < 0.05) {
+    significant_vars <- append(significant_vars, var)
+  }
+}
+for (sig in significant_vars) {
+  p <- ggplot(Boston, aes_string(x = sig, y = "crim")) + 
+    geom_point(aes(color = crim)) +
+    geom_smooth(method="lm", se=FALSE, color="black", formula=y ~ x) + 
+    labs(title=paste(sig, "vs. crim"),  # <-- change var to sig
+         x=sig, y="Per capita crime rate") +  # <-- change var to sig
+    theme_minimal() +
+    theme(legend.position="none")
+  print(p)
+}
+print(results)
+```
+For each linear model with one predictor, the coefficients are listed above. Some of the p-value is very small while others do not fit well in linear regression. In the models of zn, indus, nox, rm, age, dis, rad, tax, ptratio, black, lstat and medv, there a statistically significant association between the predictor and the response 'crim'.
+
+
+## 3
+```{r 3, warning=FALSE}
+model_all <- lm(crim ~ ., data=Boston)
+summary_model_all <- summary(model_all)
+results_table <- tibble(
+  Predictor = names(coef(summary_model_all)[, "Estimate"]),
+  Coefficient = coef(summary_model_all)[, "Estimate"],
+  P_Value = coef(summary_model_all)[, "Pr(>|t|)"],
+  R_Squared = rep(summary_model_all$r.squared, length(coefficients))
+)
+print(results_table)
+```
+The intercept of linear regression function is estimated to be 17 and the coefficients of each variable is listed above. According to the p-value, predictors that we can reject the null hypothesis is age, dis, ptrario, lstat and medv, where p-value is lower than 0.05
+
+
+## 4
+For the question2, the results that have small p-value are zn, indus, nox, rm, age, dis, rad, tax, ptratio, black, lstat and medv. For the question3, the results that have smalll p-values are age, dis, ptrario, lstat and medv. The resulting variables from question 2 is more than question 3 and all the resulting variables in question 3 are included in the results of question 2 as well. And there is also some differences between the coefficients. The differences can be presented in the plot below. Except for the variable nox, the coefficients approximately follow a linear relationship.
+
+```{r 4, fig.show='hold', fig.height = 3, fig.width = 5}
+# Extract coefficients from the results
+coeffs_univariate <- results$Coefficient
+names(coeffs_univariate) <- results$Predictor
+coeffs_full <- results_table$Coefficient
+names(coeffs_full) <- results_table$Predictor
+coeffs_full <- coeffs_full[-which(names(coeffs_full) == "(Intercept)")]
+df <- data.frame(
+  Predictor = names(coeffs_univariate),
+  Univariate = as.numeric(coeffs_univariate),
+  Multiple = as.numeric(coeffs_full)
+)
+df <- df[df$Predictor %in% names(coeffs_full), ]
+p <- ggplot(df, aes(x = Univariate, y = Multiple, label = Predictor)) + 
+  geom_point(aes(color = Predictor), size = 1) + 
+  geom_text(aes(label = Predictor), hjust = -0.1, vjust = 0.5, size = 2) +  
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "Comparison of Regression Coefficients: Univariate vs. Multivariate",
+       x = "Univariate Regression Coefficient",
+       y = "Multiple Regression Coefficient") +
+  theme_minimal() +
+  theme(legend.position = "none",        
+        axis.text = element_text(size = 5),
+        axis.title = element_text(size = 6),
+        plot.title = element_text(size = 7))
+print(p)
+
+```
+
+
+
+## 5
+The predictors with evidence of non-linear association are listed below: "indus"   "nox"     "age"     "dis"     "ptratio" "medv" . I think this is very interesting since those variables all present a non-linear association but not the other variables. 
+```{r 5}
+predictors <- names(Boston)[!names(Boston) == "crim"]  # Exclude 'crim' from predictors
+results_df <- tibble(Predictor = character(), P_Value_Linear = numeric(), 
+                    P_Value_Quadratic = numeric(), P_Value_Cubic = numeric())
+for (var in predictors) {
+  formula_str <- paste("crim ~", var, "+ I(", var, "^2) + I(", var, "^3)")
+  model <- lm(as.formula(formula_str), data=Boston)
+  p_values <- summary(model)$coefficients[, "Pr(>|t|)"]
+  results_df <- rbind(results_df, tibble(
+    Predictor = var,
+    P_Value_Linear = p_values[2],
+    P_Value_Quadratic = p_values[3],
+    P_Value_Cubic = p_values[4]
+  ))
+}
+print(results_df)
+
+results_df <- results_df %>%
+  mutate(NonLinear_Association = ifelse(P_Value_Quadratic < 0.05 | P_Value_Cubic < 0.05, "Yes", "No"))
+
+non_linear_predictors <- results_df %>% filter(NonLinear_Association == "Yes") %>% pull(Predictor)
+print(non_linear_predictors)
+```
+
